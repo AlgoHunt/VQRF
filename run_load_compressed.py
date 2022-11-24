@@ -58,24 +58,19 @@ def config_parser():
                         help='frequency of console printout and metric loggin')
     parser.add_argument("--i_weights", type=int, default=100000,
                         help='frequency of weight ckpt saving')
+    # vqrf options
     parser.add_argument("--fully_vq",  action="store_true",
                     help='fully vector quantize the full model')
     parser.add_argument("--init_importance",  action="store_true",
-                help='fully vector quantize the full model')
-    parser.add_argument("--init_g_importance",  action="store_true",
-                help='fully vector quantize the full model')
-
+                help='initialize importance score')
     parser.add_argument("--importance_include",  type=float,  default=0.00,
-            help='fully vector quantize the full model')
-
+            help='quantile threshold for non-vq-voxels')
     parser.add_argument("--importance_prune",  type=float,  default=1.0,
-            help='fully vector quantize the full model')
-
+            help='quantile threshold for prune=voxels')
     parser.add_argument("--k_expire",  type=int,  default=10,
-            help='fully vector quantize the full model')
-
-    parser.add_argument("--force_start",  type=int,  default=1000000,
-            help='fully vector quantize the full model')
+            help='expireed k code per iteration')
+    parser.add_argument("--render_fine",  action="store_true", 
+            help='rendering and testing the non compressed model')
             
     return parser
 

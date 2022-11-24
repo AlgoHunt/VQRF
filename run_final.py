@@ -56,27 +56,20 @@ def config_parser():
                         help='frequency of console printout and metric loggin')
     parser.add_argument("--i_weights", type=int, default=100000,
                         help='frequency of weight ckpt saving')
+
+    # vqrf options
     parser.add_argument("--fully_vq",  action="store_true",
                     help='fully vector quantize the full model')
     parser.add_argument("--init_importance",  action="store_true",
-                help='fully vector quantize the full model')
-    parser.add_argument("--init_g_importance",  action="store_true",
-                help='fully vector quantize the full model')
-
+                help='initialize importance score')
     parser.add_argument("--importance_include",  type=float,  default=0.00,
-            help='fully vector quantize the full model')
-
+            help='quantile threshold for non-vq-voxels')
     parser.add_argument("--importance_prune",  type=float,  default=1.0,
-            help='fully vector quantize the full model')
-
+            help='quantile threshold for prune=voxels')
     parser.add_argument("--k_expire",  type=int,  default=10,
-            help='fully vector quantize the full model')
-
-    parser.add_argument("--force_start",  type=int,  default=1000000,
-            help='fully vector quantize the full model')
-    
+            help='expireed k code per iteration')
     parser.add_argument("--render_fine",  action="store_true", 
-            help='fully vector quantize the full model')
+            help='rendering and testing the non compressed model')
             
     return parser
 
@@ -314,26 +307,13 @@ def create_new_model(cfg, cfg_model, cfg_train, xyz_min, xyz_max, stage, coarse_
     return model, optimizer
 
 def create_new_model_for_vq(cfg, cfg_model, cfg_train, xyz_min, xyz_max, stage, coarse_ckpt_path, strict=False):
-    # model_kwargs = copy.deepcopy(cfg_model)
-    # num_voxels = model_kwargs.pop('num_voxels')
-  
-    # print(f'scene_rep_reconstruction ({stage}): \033[96muse dense voxel grid\033[0m')
-    # model = dvgo.DirectVoxGO(
-    #     xyz_min=xyz_min, xyz_max=xyz_max,
-    #     num_voxels=num_voxels,
-    #     mask_cache_path=coarse_ckpt_path,
-    #     **model_kwargs)
     model_class = dvgo.DirectVoxGO
     ckpt = torch.load(coarse_ckpt_path)
     model_kwargs = ckpt['model_kwargs']
     model_kwargs.update(cfg_model)
     model = model_class(**model_kwargs)
     model.load_state_dict(ckpt['model_state_dict'],strict=False)
-
-
     model = model.to(device)
-    # ckpt = torch.load(coarse_ckpt_path)
-    # import ipdb;ipdb.set_trace()
     optimizer = utils.create_optimizer_or_freeze_model(model, cfg_train, global_step=0)
     optimizer.load_state_dict(ckpt['optimizer_state_dict'])
    
@@ -387,8 +367,6 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
     else:
         print(f'scene_rep_reconstruction ({stage}): reload from {reload_ckpt_path}')
         model, optimizer, start = load_existed_model(args, cfg, cfg_train, reload_ckpt_path)
-        if args.force_start<start:
-            start = args.force_start
     # init rendering setup
     render_kwargs = {
         'near': data_dict['near'],
@@ -693,13 +671,8 @@ def vq_finetune(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, data_dict, st
         savedir=importance_savedir,
         **render_viewpoints_kwargs)
 
-
-    
    
-
     high = None
-
-    
     model.eval()
     model.vq.train()
     VQ_CHUNK = 80000
@@ -723,10 +696,7 @@ def vq_finetune(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, data_dict, st
                 
                 print(replace_val.mean())
                 model.vq._codebook.embed[:,replace_index,:] = vq_feature[most_important_index,:]
-    # import ipdb;ipdb.set_trace()
     all_indices = model.fully_vq_reformat(args.importance_prune, args.importance_include)
-    # all_indices = model.fully_vq(args.importance_prune, args.importance_include)
-    # torch.save(model.all_indice_raw.cpu(), f'{importance_savedir}/all_indice.pth')
     model.train()
     model.vq.eval()
     from itertools import chain
@@ -815,9 +785,6 @@ def vq_finetune(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, data_dict, st
         optimizer.step()
 
         if global_step%10 == 0:
-            
-            # import ipdb;ipdb.set_trace()
-            # import torch_scatter
             with torch.no_grad():
                 gather_grid = torch.zeros(all_indices.max(), model.k0_dim).to(device) 
                 k0_grid=model.k0.grid.reshape(model.k0_dim,-1).T
@@ -904,18 +871,6 @@ def train(args, cfg, data_dict):
         eps_time_str = f'{eps_fine//3600:02.0f}:{eps_fine//60%60:02.0f}:{eps_fine%60:02.0f}'
         print('train: fine detail reconstruction in', eps_time_str)
 
-    # if not os.path.exists(os.path.join(cfg.basedir, cfg.expname, f'prune_last.tar')):
-    #     prune_finetune(
-    #             args=args, cfg=cfg,
-    #             cfg_model=cfg.fine_model_and_render, cfg_train=cfg.fine_train,
-    #             xyz_min=xyz_min_fine, xyz_max=xyz_max_fine,
-    #             data_dict=data_dict, stage='prune',
-    #             coarse_ckpt_path=coarse_ckpt_path)
-    #     eps_fine = time.time() - eps_fine
-    #     eps_time_str = f'{eps_fine//3600:02.0f}:{eps_fine//60%60:02.0f}:{eps_fine%60:02.0f}'
-    #     print('train: prune finetune  in', eps_time_str)
-
-    # if not os.path.exists(os.path.join(cfg.basedir, cfg.expname, f'vq_last.tar')):
     vq_finetune(
             args=args, cfg=cfg,
             cfg_model=cfg.vq_model_and_render, cfg_train=cfg.vq_train,
@@ -936,7 +891,6 @@ def init_importance(model, render_poses, HW, Ks, ndc, render_kwargs, savedir=Non
     '''Render images for the given viewpoints; run evaluation if gt given.
     '''
     imp_path = os.path.join(savedir, 'importance.pth')
-    # if os.path.exists(os.path.join(savedir, 'importance.pth')):
     if os.path.exists(imp_path):
         print('load exsited importance calculation')
         model.importance = torch.load(imp_path)
@@ -977,66 +931,7 @@ def init_importance(model, render_poses, HW, Ks, ndc, render_kwargs, savedir=Non
     torch.save(model.importance, imp_path)
     return 
 
-
-
-def init_g_importance(model, render_poses, HW, Ks, ndc, render_kwargs,
-                      gt_imgs=None, savedir=None, dump_images=False,
-                      render_factor=0, render_video_flipy=False, render_video_rot90=0,
-                      eval_ssim=False, eval_lpips_alex=False, eval_lpips_vgg=False):
-    '''Render images for the given viewpoints; run evaluation if gt given.
-    '''
-    imp_path = os.path.join(savedir, 'gimp.pth')
-    # if os.path.exists(os.path.join(savedir, 'importance.pth')):
-    if os.path.exists(imp_path):
-        print('load exsited gbased importance calculation')
-        model.g_importance = torch.load(imp_path)
-        return 
-    assert len(render_poses) == len(HW) and len(HW) == len(Ks)
-    print('start importance calculation')
-    if render_factor!=0:
-        HW = np.copy(HW)
-        Ks = np.copy(Ks)
-        HW = (HW/render_factor).astype(int)
-        Ks[:, :2, :3] /= render_factor
-
-   
-    pseudo_grid = torch.ones_like(model.density.grid)
-    pseudo_grid.requires_grad = True
-    for i, c2w in enumerate(tqdm(render_poses)):
-
-        H, W = HW[i]
-        K = Ks[i]
-        c2w = torch.Tensor(c2w)
-        rays_o, rays_d, viewdirs = dvgo.get_rays_of_a_view(
-                H, W, K, c2w, ndc, inverse_y=render_kwargs['inverse_y'],
-                flip_x=cfg.data.flip_x, flip_y=cfg.data.flip_y)
-        keys = ['rgb_marched', 'depth', 'alphainv_last']
-        rays_o = rays_o.flatten(0,-2)
-        rays_d = rays_d.flatten(0,-2)
-        viewdirs = viewdirs.flatten(0,-2)
-      
-        # render_result_chunks = []
-        i = 0
-        for ro, rd, vd in zip(rays_o.split(8192, 0), rays_d.split(8192, 0), viewdirs.split(8192, 0)):
-            ret = model.forward_imp(ro, rd, vd, pseudo_grid, **render_kwargs)
-
-            # render_result_chunks.append({k: v for k, v in ret.items() if k in keys})
-            if (ret['weights'].size(0) !=0) and (ret['sampled_pseudo_grid'].size(0) !=0):
-                (ret['weights']*ret['sampled_pseudo_grid']).sum().backward()
-            i += 1
-
-    model.g_importance = pseudo_grid.grad.clone()
-    # import ipdb;ipdb.set_trace()
-    # model.importance = model.importance.max() - model.importance
-    # model.importance = model.importance + model.importance.mean()*10
-    # model.importance = torch.ones_like(pseudo_grid)*2
-    model.density.grid.grad = None
-    torch.save(model.g_importance, imp_path)
-    return 
-
-
     
-
 
 
 if __name__=='__main__':
