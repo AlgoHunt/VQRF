@@ -5,9 +5,9 @@ Lingzhi Li*, Zhen Shen*, Zhongshu Wang, Li Shen, Liefeng Bo
 Alibaba Group
 
 
-![compression](https://raw.githubusercontent.com/AlgoHunt/VQRF/master/figures/teaser.png)
+![compression](figures/teaser.png)
 
-![Pipeline](https://raw.githubusercontent.com/AlgoHunt/VQRF/master/figures/pipeline.png)
+![Pipeline](figures/pipeline.png)
 
 **Note**: This repository only contain VQ-DVGO. We will add VQ-Plenoxels and VQ-TensoRF in the future.
 
