@@ -646,7 +646,7 @@ def vq_finetune(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, data_dict, st
     
 
     
-    #===================importance init ====================
+    #=================== Initialize importance score  ====================
     testsavedir = os.path.join(cfg.basedir, cfg.expname)
     stepsize = cfg.fine_model_and_render.stepsize
     render_viewpoints_kwargs = {
@@ -671,14 +671,13 @@ def vq_finetune(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, data_dict, st
         savedir=importance_savedir,
         **render_viewpoints_kwargs)
 
-   
+    #=================== Codebook initialization  ====================
     high = None
     model.eval()
     model.vq.train()
     VQ_CHUNK = 80000
     with torch.no_grad():
-        model.init_cdf_mask(args.importance_prune, args.importance_include)
-        # import ipdb; ipdb.set_trace()
+        model.init_cdf_mask(args.importance_prune, args.importance_include) # voxel prune  
         vq_mask = torch.logical_xor(model.non_prune_mask,  model.keep_mask)
         if vq_mask.any():
             k0_needs_vq = model.k0.grid.clone().reshape(model.k0_dim, -1).T[vq_mask]
@@ -693,21 +692,21 @@ def vq_finetune(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, data_dict, st
                 model.vq(vq_feature.unsqueeze(0), weight=vq_weight.reshape(1,-1,1))
                 replace_val, replace_index = torch.topk(model.vq._codebook.cluster_size, k=k, largest=False)
                 _, most_important_index = torch.topk(vq_weight, k=k, largest=True)
-                
-                print(replace_val.mean())
                 model.vq._codebook.embed[:,replace_index,:] = vq_feature[most_important_index,:]
+
+    #=================== Appply voxel pruning and vector quanzation  ====================
     all_indices = model.fully_vq_reformat(args.importance_prune, args.importance_include)
+   
+
+    
+    #=================== Joint finetune VQ-DVGO   ====================
     model.train()
     model.vq.eval()
-    from itertools import chain
-    
-    
-
-    ckpt = torch.load(load_ckpt_path)
+    ckpt = torch.load(load_ckpt_path) 
     optimizer = utils.create_optimizer_or_freeze_model(model, cfg_train, global_step=0)
     optimizer.load_state_dict(ckpt['optimizer_state_dict'])
    
-
+    # reset initial learning rate
     for i_opt_g, param_group in enumerate(optimizer.param_groups):
         param_group['lr'] = param_group['lr'] * 5
     for global_step in trange(1, 10000):
@@ -734,12 +733,11 @@ def vq_finetune(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, data_dict, st
             rays_o = rays_o.to(device)
             rays_d = rays_d.to(device)
             viewdirs = viewdirs.to(device)
-        use_vq_flag = False
-        
+
         assert model.importance is not None
         render_result = model(
             rays_o, rays_d, viewdirs,
-            global_step=global_step, target=target, is_train=True, use_vq_flag=use_vq_flag, include_thres=high,
+            global_step=global_step, target=target, is_train=True, use_vq_flag=False, include_thres=high,
             **render_kwargs)
 
         # gradient descent step
@@ -780,10 +778,9 @@ def vq_finetune(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, data_dict, st
                     cfg_train.weight_tv_k0/len(rays_o), global_step<cfg_train.tv_dense_before)
         
         
-       
-
         optimizer.step()
 
+        # synchornize codebook for every 10 iterations  
         if global_step%10 == 0:
             with torch.no_grad():
                 gather_grid = torch.zeros(all_indices.max(), model.k0_dim).to(device) 
@@ -1041,9 +1038,6 @@ if __name__=='__main__':
         saving_path = os.path.join(os.path.dirname(ckpt_path_fine),'fine_model.pth')
         torch.save(saving_dict, saving_path)
         os.system(f"zip {saving_path+'.zip'} {saving_path}")
-        # print("================================ test in half =======================================")
-        # model_vq.k0.grid.half().float()
-        # model_vq.density.grid.half().float()
         model_vq.eval()
         model_vq.importance = torch.load( os.path.join(cfg.basedir, cfg.expname, 'importance.pth'))
         model_vq.fully_vq_reformat(args.importance_prune, args.importance_include, 
@@ -1051,50 +1045,8 @@ if __name__=='__main__':
 
         model_vq.mask_cache.mask[:] = True
         model_vq.update_occupancy_cache()
-        # import ipdb;ipdb.set_trace()
 
            
-
-    # # load vq model for rendring
-    # if args.render_test or args.render_train or args.render_video:
-    #     if args.ft_path:
-    #         ckpt_path = args.ft_path
-    #     else:
-    #         ckpt_path = os.path.join(cfg.basedir, cfg.expname, 'vq_last.tar')
-    #     ckpt_name = ckpt_path.split('/')[-1][:-4]
-    #     if cfg.data.ndc:
-    #         model_class = dmpigo.DirectMPIGO
-    #     elif cfg.data.unbounded_inward:
-    #         model_class = dcvgo.DirectContractedVoxGO
-    #     else:
-    #         model_class = dvgo.DirectVoxGO
-    #     model = utils.load_model(model_class, ckpt_path).to(device)
-    #     print("================================ test in half =======================================")
-    #     model.k0.grid.half().float()
-    #     model.density.grid.half().float()
-
-
-    #     stepsize = cfg.fine_model_and_render.stepsize
-    #     render_viewpoints_kwargs = {
-    #         'model': model,
-    #         'ndc': cfg.data.ndc,
-    #         'render_kwargs': {
-    #             'near': data_dict['near'],
-    #             'far': data_dict['far'],
-    #             'bg': 1 if cfg.data.white_bkgd else 0,
-    #             'stepsize': stepsize,
-    #             'inverse_y': cfg.data.inverse_y,
-    #             'flip_x': cfg.data.flip_x,
-    #             'flip_y': cfg.data.flip_y,
-    #             'render_depth': True,
-    #         },
-    #     }
-
-    #     model.eval()
-    
-
- 
-    
     
    
     # render trainset and eval

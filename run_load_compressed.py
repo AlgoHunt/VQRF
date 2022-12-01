@@ -319,7 +319,7 @@ def load_vqdvgo(path, device='cuda'):
     def load_f(name, allow_pickle=False,array_name='arr_0'):
         return np.load(os.path.join(path,name),allow_pickle=allow_pickle)[array_name]
 
-    metadata =load_f('metadata.npz',allow_pickle=True,array_name='metadata')
+    metadata = load_f('metadata.npz',allow_pickle=True,array_name='metadata')
     metadata = metadata.item()
 
     ## prepare needed model kwargs 
@@ -418,10 +418,8 @@ if __name__=='__main__':
     model.load_state_dict(mdoel_state_dict, strict=False)
     
     model.to(device)
-    # model.mask_cache.mask &= (model.density.grid.squeeze(0).squeeze(0) != 0)
     model.mask_cache.mask[:] = True
     model.update_occupancy_cache()
-    # import ipdb;ipdb.set_trace()
 
 
     stepsize = cfg.fine_model_and_render.stepsize
@@ -439,10 +437,6 @@ if __name__=='__main__':
             'render_depth': True,
         },
     }
-
-    
-
-   
    
     # render trainset and eval
     if args.render_train:

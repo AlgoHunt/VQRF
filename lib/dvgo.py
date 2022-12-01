@@ -587,14 +587,8 @@ class DirectVoxGO(torch.nn.Module):
             metadata['model_state_dict']['density.xyz_max'] = model_state_dict['density.xyz_max']
             metadata['model_state_dict']['k0.xyz_min'] = model_state_dict['k0.xyz_min']
             metadata['model_state_dict']['k0.xyz_max'] = model_state_dict['k0.xyz_max']
-            # for k, v in model_state_dict.items():
-            #     if k.startswith('rgbnet')
-
-            # for k,v in saving_dict.items():
             np.savez_compressed(f'{save_path}/{save_name}.npz', **saving_dict)
             np.savez_compressed(f'{save_path}/{save_name}_metadata.npz', metadata=metadata)
-            # os.system(f"zip -r {save_path}{save_name}.zip {save_path}/{save_name} ")
-            # os.system(f"zip -r -0 {save_path}{save_name}_0.zip {save_path}/{save_name} ")
 
     @torch.no_grad()
     def calc_vector_quantized_feature(self):
@@ -651,8 +645,8 @@ class DirectVoxGO(torch.nn.Module):
        
         
        
-        # for ease of implementation we save also save a index for non-vq-voxels,
-        # note that these part of index will not be saved
+        # To ease the implementation of codebook finetuneing, we add indexs of non-vq-voxels to all_indice.
+        # note that these part of indexs will not be saved
         all_indice[self.keep_mask] = torch.arange(self.keep_mask.sum())+ self.used_kwargs["codebook_size"]
         
             
@@ -661,7 +655,6 @@ class DirectVoxGO(torch.nn.Module):
             import math
             from copy import deepcopy
             os.makedirs(f'{save_path}/extreme_saving', exist_ok=True)
-            # import ipdb;ipdb.set_trace()
             np.savez_compressed(f'{save_path}/extreme_saving/non_prune_density.npz',non_prune_density.int_repr().cpu().numpy())
             np.savez_compressed(f'{save_path}/extreme_saving/non_vq_grid.npz',non_vq_grid.int_repr().cpu().numpy())
             np.savez_compressed(f'{save_path}/extreme_saving/non_prune_mask.npz',np.packbits(self.non_prune_mask.reshape(-1).cpu().numpy()))
@@ -671,11 +664,15 @@ class DirectVoxGO(torch.nn.Module):
                 mask = 2 ** torch.arange(bits - 1, -1, -1).to(x.device, x.dtype)
                 return x.unsqueeze(-1).bitwise_and(mask).ne(0).float()
             
+            # vq indice was saved in according to the bit length
             bin_indices = dec2bin(all_indice[torch.logical_xor(self.non_prune_mask,self.keep_mask)], int(math.log2(self.used_kwargs["codebook_size"]))).bool().cpu().numpy()
-            codebook = self.vq._codebook.embed.cpu().half().numpy()
             np.savez_compressed(f'{save_path}/extreme_saving/vq_indexs.npz',np.packbits(bin_indices.reshape(-1)))
+            
+            codebook = self.vq._codebook.embed.cpu().half().numpy()
             np.savez_compressed(f'{save_path}/extreme_saving/codebook.npz',codebook)
             np.savez_compressed(f'{save_path}/extreme_saving/rgbnet.npz',deepcopy(self.rgbnet).half().cpu().state_dict())
+
+            # we also save necessary metadata 
             metadata = dict()
             metadata['global_step'] =20000
             metadata['world_size'] = self.world_size
@@ -697,6 +694,8 @@ class DirectVoxGO(torch.nn.Module):
             metadata['model_state_dict']['k0.xyz_min'] = model_state_dict['k0.xyz_min']
             metadata['model_state_dict']['k0.xyz_max'] = model_state_dict['k0.xyz_max']
             np.savez_compressed(f'{save_path}/extreme_saving/metadata.npz', metadata=metadata)
+
+            # zip everything together to get final size
             os.system(f"zip -r {save_path}/extreme_saving.zip {save_path}/extreme_saving ")
 
         new_k0_grid = new_k0_grid.T.reshape(*self.k0.grid.shape).contiguous()
