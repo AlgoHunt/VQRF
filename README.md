@@ -77,7 +77,7 @@ python autotask_final.py -g "0 1 2 3 4 5 6 7"  --configname tnt_4096code  --data
 
 Fixing TanksandTemples dataset following this [issue](https://github.com/sunset1995/DirectVoxGO/issues/4)
 
-Set -g option according to the avalible gpu on your machine. 
+Set `-g` option according to the availible gpu on your machine. 
 
 ## Testing 
 
