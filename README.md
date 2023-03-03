@@ -1,4 +1,4 @@
-# Compressing Volumetric Radiance Fields to 1 MB
+# Compressing Volumetric Radiance Fields to 1 MB (CVPR2023)
 
 Lingzhi Li*, Zhen Shen*, Zhongshu Wang, Li Shen, Liefeng Bo
 
