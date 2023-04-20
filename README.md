@@ -1,15 +1,19 @@
 # Compressing Volumetric Radiance Fields to 1 MB (CVPR2023)
 
+<a href="https://arxiv.org/abs/2211.16386"><img src="https://img.shields.io/badge/arXiv-2211.16386-b31b1b.svg" height=22.5></a>
+
 Lingzhi Li*, Zhen Shen*, Zhongshu Wang, Li Shen, Liefeng Bo
 
 Alibaba Group
+
+
 
 
 ![compression](figures/teaser.png)
 
 ![Pipeline](figures/pipeline.png)
 
-**Note**: This repository only contain VQ-DVGO. We will add VQ-Plenoxels and VQ-TensoRF in the future.
+**Note**: This repository only contain VQ-DVGO.
 
 
 ## Setup
