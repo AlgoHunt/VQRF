@@ -13,6 +13,7 @@ Alibaba Group
 
 ![Pipeline](figures/pipeline.png)
 
+**Update**: Released [VQ-TensoRF](https://github.com/Spark001/VQ-TensoRF).
 **Note**: This repository only contain VQ-DVGO.
 
 
