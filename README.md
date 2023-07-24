@@ -6,6 +6,8 @@ Lingzhi Li*, Zhen Shen*, Zhongshu Wang, Li Shen, Liefeng Bo
 
 Alibaba Group
 
+**Update**: We Released [VQ-TensoRF](https://github.com/Spark001/VQ-TensoRF) !!!
+
 Citation:
 ```
 @inproceedings{li2023compressing,
@@ -21,7 +23,6 @@ Citation:
 
 ![Pipeline](figures/pipeline.png)
 
-**Update**: Released [VQ-TensoRF](https://github.com/Spark001/VQ-TensoRF).
 **Note**: This repository only contain VQ-DVGO.
 
 
