@@ -6,8 +6,16 @@ Lingzhi Li*, Zhen Shen*, Zhongshu Wang, Li Shen, Liefeng Bo
 
 Alibaba Group
 
-
-
+Citation:
+```
+@inproceedings{li2023compressing,
+  title={Compressing volumetric radiance fields to 1 mb},
+  author={Li, Lingzhi and Shen, Zhen and Wang, Zhongshu and Shen, Li and Bo, Liefeng},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
+  pages={4222--4231},
+  year={2023}
+}
+```
 
 ![compression](figures/teaser.png)
 
